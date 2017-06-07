@@ -1,0 +1,21 @@
+<component type="addon">
+  <id>org.cockpit-project.app-freeipa</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <name>FreeIPA</name>
+  <icon type="local" height="64" width="64">/usr/share/metainfo/org.cockpit-project.app-freeipa.64x64.png</icon>
+  <summary>
+    FreeIPA Identity Management
+  </summary>
+  <description>
+    <p>
+      FreeIPA is an integrated Identity and Authentication solution
+      for Linux/UNIX networked environments. A FreeIPA server provides
+      centralized authentication, authorization and account information
+      by storing data about user, groups, hosts and other objects
+      necessary to manage the security aspects of a network of
+      computers.
+    </p>
+  </description>
+  <extends>cockpit.desktop</extends>
+  <launchable type="cockpit-package">app-freeipa</launchable>
+</component>

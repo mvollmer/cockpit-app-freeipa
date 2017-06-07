@@ -17,8 +17,8 @@ FreeIPA installer for Cockpit
 %build
 
 %install
-mkdir -p %{buildroot}/usr/share/cockpit/app-freeipa
-tar --strip-components=1 -xzf %{sources} -C %{buildroot}/usr/share/cockpit/app-freeipa
+mkdir -p %{buildroot}
+tar --strip-components=1 -xzf %{sources} -C %{buildroot}
 find %{buildroot} -type f >> files.list
 sed -i "s|%{buildroot}||" *.list
 

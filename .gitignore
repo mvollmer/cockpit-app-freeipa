@@ -2,3 +2,4 @@
 /dist/
 /cockpit-app-freeipa.tar.gz
 /cockpit-app-freeipa-*-*.src.rpm
+/_install/
