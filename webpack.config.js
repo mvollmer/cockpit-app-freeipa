@@ -4,7 +4,10 @@ var extract = require("extract-text-webpack-plugin");
 module.exports = {
     entry: "./freeipa.jsx",
     resolve: {
-        modules: [ "node_modules" ]
+        alias: {
+            "react": "react-lite-cockpit"
+        },
+        modules: [ "lib", "node_modules" ]
     },
     externals: [
         "cockpit"
