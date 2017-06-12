@@ -7,6 +7,8 @@ License: LGPLv2.1+
 Source: cockpit-app-freeipa.tar.gz
 BuildArch: noarch
 
+Requires: freeipa-server
+
 %define debug_package %{nil}
 
 %description
