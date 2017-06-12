@@ -1,5 +1,5 @@
 Name: cockpit-app-freeipa
-Version: 2
+Version: 3
 Release: 0
 Summary: FreeIPA installer for Cockpit
 License: LGPLv2.1+
