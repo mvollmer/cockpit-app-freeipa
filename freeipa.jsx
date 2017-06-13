@@ -3,6 +3,7 @@ import $ from "jquery";
 
 import cockpit from "cockpit";
 import dialog from "cockpit-components-dialog.jsx"
+import journal from "journal"
 
 import "./freeipa.css";
 import "table.css";
@@ -80,7 +81,6 @@ class Status extends React.Component {
 
         function show_setup_dialog() {
             setup_dialog(() => {
-                self.setState({ action: null });
                 self.update_status();
             });
         }
@@ -149,7 +149,10 @@ class Status extends React.Component {
                         Stop
                     </button>
                     <button className="btn btn-default fa fa-refresh"
-                            onClick={left_click(() => { this.update_status(); })}/>
+                            onClick={left_click(() => {
+                                    self.setState({ action: null });
+                                    this.update_status();
+                                })}/>
                 </div>
                 <h1>FreeIPA</h1>
                 {status_elt}
@@ -369,6 +372,12 @@ function setup_dialog(done_callback) {
     );
 }
 
+/* JOURNAL */
+
+function ipa_journal_box() {
+    return journal.logbox([ "_SYSTEMD_SLICE=system-dirsrv.slice" ], 20);
+}
+
 /* MAIN */
 
 class App extends React.Component {
@@ -382,6 +391,7 @@ class App extends React.Component {
 }
 
 $(function () {
-    React.render(<App/>, $('body')[0]);
+    React.render(<App/>, $('#app')[0]);
+    $('#journal').html(ipa_journal_box());
     $('body').show();
 });
