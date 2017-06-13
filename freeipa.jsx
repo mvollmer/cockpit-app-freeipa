@@ -21,101 +21,120 @@ function left_click(fun) {
 class Status extends React.Component {
     constructor() {
         super();
-        this.state = { action: null };
+        this.state = { status: null, action: null };
     }
 
     componentDidMount() {
-        this.update();
+        this.update_status();
     }
 
-    update() {
-        this.setState({ running: true,
-                        action: "Checking status",
-                        status: null, failure: null, needs_config: null });
+    update_status() {
+        this.setState({ status: { running: true } });
         cockpit.spawn([ "ipactl", "status" ], { superuser: true, err: "message" })
                .done(output => {
-                   this.setState({ running: false, status: output });
-                   console.log(output);
+                   this.setState({ status: { output: output } });
                })
                .fail((error) => {
                    if (error.exit_status == 4) {
-                       this.setState({ running: false, needs_config: true });
+                       this.setState({ status: { needs_config: true } });
                    } else {
-                       this.setState({ running: false,
-                                       failure_title: "Checking the status failed",
-                                       failure: error.message });
+                       this.setState({ status: { failure: error.message } });
                    }
                });
     }
 
     start() {
-        this.setState({ running: true,
-                        action: "Starting",
-                        failure: null });
+        this.setState({ action: { running: true,
+                                  title: "Starting" } });
         cockpit.spawn([ "ipactl", "start" ], { superuser: true, err: "message" })
                .done(output => {
-                   console.log(output);
-                   this.update();
+                   this.setState({ action: { output: output } });
+                   this.update_status();
                })
                .fail((error) => {
-                   this.setState({ running: false,
-                                   failure_title: "Starting failed",
-                                   failure: error.message });
+                   this.setState({ action: {failure_title: "Starting failed",
+                                            failure: error.message } });
+                   this.update_status();
                });
     }
 
     stop() {
-        this.setState({ running: true,
-                        action: "Stopping",
-                        failure: null, needs_upgrade: null });
+        this.setState({ action: { running: true,
+                                  title: "Stopping" } });
         cockpit.spawn([ "ipactl", "stop" ], { superuser: true, err: "message" })
                .done(output => {
-                   console.log(output);
-                   this.update();
+                   this.setState({ action: { output: output } });
+                   this.update_status();
                })
                .fail((error) => {
-                   this.setState({ running: false,
-                                   failure_title: "Stopping failed",
-                                   failure: error.message });
+                   this.setState({ action: { failure_title: "Stopping failed",
+                                             failure: error.message } });
+                   this.update_status();
                });
     }
 
     render() {
         var self = this;
-        var status;
+        var status, status_elt;
+        var action, action_elt;
 
         function show_setup_dialog() {
             setup_dialog(() => {
-                self.update();
+                self.setState({ action: null });
+                self.update_status();
             });
         }
 
-        if (this.state.running) {
-            status = (
-                <center>
-                    <div>{this.state.action}</div>
-                    <div className="spinner"/>
-                </center>
-            );
-        } else if (this.state.needs_config) {
-            status = (
-                <center>
-                    <div>FreeIPA needs to be setup.</div>
-                    <button className="btn btn-primary" onClick={left_click(show_setup_dialog)}>Setup</button>
-                </center>
-            );
-        } else if (this.state.failure) {
-            status = (
-                <div className="alert alert-danger">
-                    <span className="pficon pficon-error-circle-o"/>
-                    <strong>{ this.state.failure_title }</strong>
-                    <pre>{ this.state.failure }</pre>
-                </div>
-            );
-        } else {
-            status = (
-                <pre>{this.state.status}</pre>
-            );
+        status = this.state.status;
+        if (status) {
+            if (status.running) {
+                status_elt = (
+                    <center>
+                        <div className="spinner"/>
+                    </center>
+                );
+            } else if (status.needs_config) {
+                status_elt = (
+                    <center>
+                        <div>FreeIPA needs to be setup.</div>
+                        <button className="btn btn-primary" onClick={left_click(show_setup_dialog)}>Setup</button>
+                    </center>
+                );
+            } else if (status.failure) {
+                status_elt = (
+                    <div className="alert alert-danger">
+                        <span className="pficon pficon-error-circle-o"/>
+                        <strong>There was an error while checking the status</strong>
+                        <pre>{status.failure}</pre>
+                    </div>
+                );
+            } else {
+                status_elt = (
+                    <pre>{status.output}</pre>
+                );
+            }
+        }
+
+        action = this.state.action;
+        if (action) {
+            if (action.running) {
+                action_elt = (
+                    <center>
+                        <div>{action.title}</div>
+                        <div className="spinner"/>
+                    </center>
+                );
+            } else if (action.failure) {
+                action_elt = (
+                    <div className="alert alert-danger">
+                        <span className="pficon pficon-error-circle-o"/>
+                        <strong>{action.failure_title}</strong>
+                        <pre>{action.failure}</pre>
+                    </div>
+                );
+            } else {
+                action_elt = null;
+            }
         }
 
         return (
@@ -130,10 +149,11 @@ class Status extends React.Component {
                         Stop
                     </button>
                     <button className="btn btn-default fa fa-refresh"
-                            onClick={left_click(() => { this.update(); })}/>
+                            onClick={left_click(() => { this.update_status(); })}/>
                 </div>
                 <h1>FreeIPA</h1>
-                {status}
+                {status_elt}
+                {action_elt}
             </div>
         );
     }
@@ -141,16 +161,47 @@ class Status extends React.Component {
 
 /* SETUP */
 
-function setup(options) {
-    return cockpit.spawn([ "ipa-server-install",
-                           "-U",
-                           "-r", options.realm,
-                           "-p", options.dirmanpw,
-                           "-a", options.adminpw ],
-                         { superuser: true,
-                           err: "message"
-                         }).
-                   stream((data) => { console.log(data); });
+function setup(options, progress_cb) {
+    var outbuf = "";
+    var cur_title, cur_perc, progress;
+    var perc_re = /^ {2}\[(\d+)\/(\d+)\]/;
+
+    function parse_progress(data) {
+        outbuf += data;
+        var lines = outbuf.split("\n");
+        for (var i = 0; i < lines.length-1; i++) {
+            var m = perc_re.exec(lines[i]);
+            if (m) {
+                cur_perc = parseInt(m[1])/parseInt(m[2]) * 100;
+            } else {
+                cur_title = lines[i];
+            }
+        }
+        if (cur_title) {
+            progress = cur_title;
+            if (cur_perc)
+                progress += " / " + cur_perc.toFixed(0) + "%";
+            progress_cb(progress);
+        }
+        outbuf = lines[lines.length-1];
+    }
+
+    var promise = cockpit.spawn([ "ipa-server-install",
+                                  "-U",
+                                  "-r", options.realm,
+                                  "-p", options.dirmanpw,
+                                  "-a", options.adminpw ],
+                                { superuser: true,
+                                  err: "message"
+                                });
+
+    promise.stream(parse_progress);
+    promise.cancel = () => {
+        console.log("cancelling");
+        promise.close("terminated");
+    };
+
+    return promise;
 }
 
 class Validated extends React.Component {
@@ -219,11 +270,11 @@ function setup_dialog(done_callback) {
 
     var errors = null;
     var values = {
-        realm: "",
-        dirmanpw: "",
-        dirmanpw2: "",
-        adminpw: "",
-        adminpw2: ""
+        realm: "mvo.lan",
+        dirmanpw: "foobarfoo",
+        dirmanpw2: "foobarfoo",
+        adminpw: "foobarfoo",
+        adminpw2: "foobarfoo"
     };
 
     function onchanged() {
@@ -271,14 +322,40 @@ function setup_dialog(done_callback) {
         return cockpit.resolve();
     }
 
-    function apply() {
-        return validate().then(function () {
-            if (errors) {
-                return cockpit.reject();
-            } else {
-                return setup(values);
-            }
-        });
+    function apply(progress_cb) {
+        var dfd = cockpit.defer();
+        var promise = dfd.promise();
+
+        var setup_promise;
+        var cancelled = false;
+
+        validate().
+                   done(function () {
+                       if (cancelled) {
+                           cockpit.reject();
+                       } else {
+                           setup_promise = setup(values, progress_cb);
+                           setup_promise.
+                                         done(function () {
+                                             dfd.resolve();
+                                         }).
+                                         fail(function (error) {
+                                             dfd.reject(error);
+                                         });
+                       }
+
+                   }).
+                   fail(function(error) {
+                       dfd.reject(error);
+                   });
+
+        promise.cancel = function() {
+            if (setup_promise)
+                setup_promise.close("terminated");
+            cancelled = true;
+        }
+
+        return promise;
     }
 
     dlg = dialog.show_modal_dialog(
