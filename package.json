@@ -3,7 +3,8 @@
     "private": true,
     "dependencies": {
         "jquery": "2.1.4",
-        "react-lite-cockpit": "cockpit-project/react-lite"
+        "react-lite-cockpit": "cockpit-project/react-lite",
+        "mustache": ""
     },
     "devDependencies": {
         "webpack": "",
@@ -13,9 +14,14 @@
         "babel-loader": "",
         "babel-preset-es2015": "",
         "babel-preset-react": "",
-        "css-loader": ""
+        "css-loader": "",
+        "eslint": "",
+        "eslint-plugin-react": "",
+        "eslint-loader": "",
+        "raw-loader": ""
     },
     "scripts": {
-        "build": "webpack"
+        "build": "webpack",
+        "watch": "webpack --watch"
     }
 }

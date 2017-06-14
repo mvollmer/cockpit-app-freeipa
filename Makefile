@@ -15,5 +15,3 @@ srpm: clean all
 	  --define "_sourcedir `pwd`" \
           --define "_srcrpmdir `pwd`" \
           cockpit-app-freeipa.spec
-
-.PHONY: dist
