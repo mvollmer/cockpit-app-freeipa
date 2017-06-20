@@ -3,3 +3,15 @@
     padding-left: 10px;
     padding-right: 10px;
 }
+
+.service-status-table td:nth-child(1) {
+    padding-right: 5em;
+}
+
+.service-status-table td:nth-child(2).RUNNING {
+    color: green;
+}
+
+.port-status-table td:nth-child(1) {
+    padding-right: 5em;
+}

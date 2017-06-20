@@ -3,10 +3,12 @@ import $ from "jquery";
 
 import cockpit from "cockpit";
 import dialog from "cockpit-components-dialog.jsx"
-import journal from "journal"
+import OnOff from "cockpit-components-onoff.jsx"
 
 import "./freeipa.css";
 import "table.css";
+
+/* UTILITIES */
 
 function left_click(fun) {
     return function (event) {
@@ -17,7 +19,116 @@ function left_click(fun) {
     };
 }
 
+/* FIREWALL */
+
+class FirewallPorts extends React.Component {
+    constructor() {
+        super();
+        this.state = { };
+    }
+
+    componentDidMount() {
+        var self = this;
+
+        self.firewalld = cockpit.dbus("org.fedoraproject.FirewallD1");
+        self.zone = self.firewalld.proxy("org.fedoraproject.FirewallD1.zone",
+                                         "/org/fedoraproject/FirewallD1");
+        self.props.ports.forEach(p => {
+            self.zone.call("queryService", [ "", p ]).
+                 done(r => {
+                     var s = { }; s[p] = r[0];
+                     self.setState(s);
+                 });
+        });
+
+        $(self.zone).on("ServiceAdded", (event, zone, service) => {
+            // XXX - we ignore zone
+            if (service in self.state) {
+                var s = { }; s[service] = true;
+                self.setState(s);
+            }
+        });
+
+        $(self.zone).on("ServiceRemoved", (event, zone, service) => {
+            // XXX - we ignore zone
+            if (service in self.state) {
+                var s = { }; s[service] = false;
+                self.setState(s);
+            }
+        });
+    }
+
+    render() {
+        var self = this;
+
+        function row(p) {
+            function toggle(val) {
+                // XXX - this only affects the runtime config
+                if (val) {
+                    self.zone.call("addService", [ "", p, 0 ]).
+                         fail(err => {
+                             console.warn("Failed to open port", p, err.message || err);
+                         });
+                } else {
+                    self.zone.call("removeService", [ "", p ]).
+                         fail(err => {
+                             console.warn("Failed to close port", p, err.message || err);
+                         });
+                }
+            }
+
+            return (
+                <tr>
+                    <td>{p}</td>
+                    <td>
+                        { self.state[p] === undefined? null : <OnOff.OnOffSwitch state={self.state[p]}
+                                                                                 onChange={toggle}/>
+                        }
+                    </td>
+                </tr>
+            );
+        }
+
+        return (
+            <table className="port-status-table">
+                { this.props.ports.map(row) }
+            </table>
+        );
+    }
+}
+
 /* STATUS */
+
+function parse_ipactl_status(text, conf) {
+    var service_re = /^(.+) Service: (.+)$/;
+    var services = [ ];
+    var stopped = true;
+
+    text.split("\n").forEach(l => {
+        var m = service_re.exec(l);
+        if (m) {
+            services.push({ name: m[1], status: m[2] });
+            if (m[2] != "STOPPED")
+                stopped = false;
+        }
+    });
+
+    var config_re = /^(.+)=(.+)$/;
+    var config = { };
+
+    conf.split("\n").forEach(l => {
+        var m = config_re.exec(l);
+        if (m)
+            config[m[1].trim()] = m[2].trim();
+    });
+
+    return {
+        stopped: stopped,
+        services: services,
+        config: config
+    };
+}
+
 
 class Status extends React.Component {
     constructor() {
@@ -33,7 +144,10 @@ class Status extends React.Component {
         this.setState({ status: { running: true } });
         cockpit.spawn([ "ipactl", "status" ], { superuser: true, err: "message" })
                .done(output => {
-                   this.setState({ status: { output: output } });
+                   cockpit.file("/etc/ipa/default.conf").read().done(config => {
+                       console.log(config);
+                       this.setState({ status: parse_ipactl_status(output, config) });
+                   });
                })
                .fail((error) => {
                    if (error.exit_status == 4) {
@@ -79,26 +193,30 @@ class Status extends React.Component {
         var status, status_elt;
         var action, action_elt;
 
+        console.log(self.state.status);
+
         function show_setup_dialog() {
             setup_dialog(() => {
                 self.update_status();
             });
         }
 
+        // XXX - hard coded
+        // XXX - just use freeipa-ldap?
+        var ports = [ "http", "https", "ldap", "ldaps", "kerberos", "kpasswd", "ntp" ];
+
         status = this.state.status;
         if (status) {
             if (status.running) {
                 status_elt = (
-                    <center>
-                        <div className="spinner"/>
-                    </center>
+                    <div className="spinner"/>
                 );
             } else if (status.needs_config) {
                 status_elt = (
-                    <center>
-                        <div>FreeIPA needs to be setup.</div>
+                    <div>
+                        <h2>FreeIPA needs to be setup.</h2>
                         <button className="btn btn-primary" onClick={left_click(show_setup_dialog)}>Setup</button>
-                    </center>
+                    </div>
                 );
             } else if (status.failure) {
                 status_elt = (
@@ -108,9 +226,30 @@ class Status extends React.Component {
                         <pre>{status.failure}</pre>
                     </div>
                 );
+            } else if (status.stopped) {
+                status_elt = (
+                    <div>
+                        <h2>FreeIPA for <b>{status.config.realm}</b> is stopped.</h2>
+                        <h3>Network ports</h3>
+                        <FirewallPorts ports={ports}/>
+                    </div>
+                );
             } else {
                 status_elt = (
-                    <pre>{status.output}</pre>
+                    <div>
+                        <h2>FreeIPA for <b>{status.config.realm}</b> is running.</h2>
+                        <p>The FreeIPA web interface can be accessed at <a href={"https://" + status.config.host}>
+                            {status.config.host}</a></p>
+                        <h3>Services</h3>
+                        <table className="service-status-table">
+                            { status.services.map(s => (
+                                  <tr><td>{s.name}</td><td className={s.status}>{s.status}</td></tr>
+                              ))
+                            }
+                        </table>
+                        <h3>Network ports</h3>
+                        <FirewallPorts ports={ports}/>
+                    </div>
                 );
             }
         }
@@ -119,10 +258,10 @@ class Status extends React.Component {
         if (action) {
             if (action.running) {
                 action_elt = (
-                    <center>
+                    <div>
                         <div>{action.title}</div>
                         <div className="spinner"/>
-                    </center>
+                    </div>
                 );
             } else if (action.failure) {
                 action_elt = (
@@ -155,8 +294,10 @@ class Status extends React.Component {
                                 })}/>
                 </div>
                 <h1>FreeIPA</h1>
-                {status_elt}
-                {action_elt}
+                <center>
+                    {status_elt}
+                    {action_elt}
+                </center>
             </div>
         );
     }
@@ -372,12 +513,6 @@ function setup_dialog(done_callback) {
     );
 }
 
-/* JOURNAL */
-
-function ipa_journal_box() {
-    return journal.logbox([ "_SYSTEMD_SLICE=system-dirsrv.slice" ], 20);
-}
-
 /* MAIN */
 
 class App extends React.Component {
@@ -392,6 +527,5 @@ class App extends React.Component {
 
 $(function () {
     React.render(<App/>, $('#app')[0]);
-    $('#journal').html(ipa_journal_box());
     $('body').show();
 });
