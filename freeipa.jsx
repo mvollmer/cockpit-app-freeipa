@@ -100,19 +100,6 @@ class FirewallPorts extends React.Component {
 /* STATUS */
 
 function parse_ipactl_status(text, conf) {
-    var service_re = /^(.+) Service: (.+)$/;
-    var services = [ ];
-    var stopped = true;
-
-    text.split("\n").forEach(l => {
-        var m = service_re.exec(l);
-        if (m) {
-            services.push({ name: m[1], status: m[2] });
-            if (m[2] != "STOPPED")
-                stopped = false;
-        }
-    });
-
     var config_re = /^(.+)=(.+)$/;
     var config = { };
 
@@ -120,6 +107,29 @@ function parse_ipactl_status(text, conf) {
         var m = config_re.exec(l);
         if (m)
             config[m[1].trim()] = m[2].trim();
+    });
+
+    var service_re = /^(.+) Service: (.+)$/;
+    var services = [ ];
+    var stopped = true;
+
+    text.split("\n").forEach(l => {
+        var m = service_re.exec(l);
+        if (m) {
+            var name = m[1];
+            var unit;
+            var status = m[2];
+
+            if (name == "Directory" && config.realm)
+                name = "dirsrv@" + config.realm;
+
+            // XXX - ipctl should tell us the unit
+            unit = name + ".service";
+
+            services.push({ name: name, unit: unit, status: status });
+            if (m[2] != "STOPPED")
+                stopped = false;
+        }
     });
 
     return {
@@ -243,7 +253,16 @@ class Status extends React.Component {
                         <h3>Services</h3>
                         <table className="service-status-table">
                             { status.services.map(s => (
-                                  <tr><td>{s.name}</td><td className={s.status}>{s.status}</td></tr>
+                                  <tr>
+                                      <td>
+                                          <a onClick={left_click(() => {
+                                                  cockpit.jump("system/services#/" + encodeURIComponent(s.unit));
+                                              })}>
+                                              {s.name}
+                                          </a>
+                                      </td>
+                                      <td className={s.status}>{s.status}</td>
+                                  </tr>
                               ))
                             }
                         </table>
