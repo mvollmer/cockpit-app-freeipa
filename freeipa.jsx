@@ -201,7 +201,7 @@ class Status extends React.Component {
     render() {
         var self = this;
         var status, status_elt;
-        var action, action_elt;
+        var action, action_progress, action_error;
 
         console.log(self.state.status);
 
@@ -276,14 +276,16 @@ class Status extends React.Component {
         action = this.state.action;
         if (action) {
             if (action.running) {
-                action_elt = (
-                    <div>
-                        <div>{action.title}</div>
-                        <div className="spinner"/>
-                    </div>
+                action_progress = (
+                    <span className="action-progress">
+                        {action.title}
+                        <span className="spinner spinner-sm spinner-inline"/>
+                    </span>
                 );
+                action_error = null;
             } else if (action.failure) {
-                action_elt = (
+                action_progress = null
+                action_error = (
                     <div className="alert alert-danger">
                         <span className="pficon pficon-error-circle-o"/>
                         <strong>{action.failure_title}</strong>
@@ -291,13 +293,15 @@ class Status extends React.Component {
                     </div>
                 );
             } else {
-                action_elt = null;
+                action_progress = null;
+                action_error = null;
             }
         }
 
         return (
             <div>
                 <div className="pull-right">
+                    {action_progress}
                     <button className="btn btn-default"
                             onClick={left_click(() => { this.start(); })}>
                         Start
@@ -314,8 +318,8 @@ class Status extends React.Component {
                 </div>
                 <h1>FreeIPA</h1>
                 <center>
+                    {action_error}
                     {status_elt}
-                    {action_elt}
                 </center>
             </div>
         );
