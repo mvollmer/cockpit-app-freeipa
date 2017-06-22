@@ -437,11 +437,11 @@ function setup_dialog(done_callback) {
 
     var errors = null;
     var values = {
-        realm: "mvo.lan",
-        dirmanpw: "foobarfoo",
-        dirmanpw2: "foobarfoo",
-        adminpw: "foobarfoo",
-        adminpw2: "foobarfoo"
+        realm: "",
+        dirmanpw: "",
+        dirmanpw2: "",
+        adminpw: "",
+        adminpw2: ""
     };
 
     function onchanged() {
