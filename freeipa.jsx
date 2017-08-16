@@ -19,6 +19,22 @@ function left_click(fun) {
     };
 }
 
+function show_error(text) {
+    dialog.show_modal_dialog(
+        {
+            title: "Error",
+            body: (
+                <div className="modal-body">
+                    <p>{text}</p>
+                </div>
+            )
+        },
+        {
+            cancel_caption: "Close",
+            actions: [ ]
+        });
+}
+
 /* FIREWALL */
 
 class FirewallPorts extends React.Component {
@@ -90,9 +106,12 @@ class FirewallPorts extends React.Component {
         }
 
         return (
-            <table className="port-status-table">
-                { this.props.ports.map(row) }
-            </table>
+            <div>
+                <h3>Network Ports</h3>
+                <table className="port-status-table">
+                    { this.props.ports.map(row) }
+                </table>
+            </div>
         );
     }
 }
@@ -118,7 +137,7 @@ function parse_ipactl_status(text, conf) {
         if (m) {
             var name = m[1];
             var unit;
-            var status = m[2];
+            var status, status_class;
 
             if (name == "Directory" && config.realm)
                 name = "dirsrv@" + config.realm;
@@ -126,7 +145,14 @@ function parse_ipactl_status(text, conf) {
             // XXX - ipctl should tell us the unit
             unit = name + ".service";
 
-            services.push({ name: name, unit: unit, status: status });
+            status = status_class = m[2];
+            if (status_class == "RUNNING")
+                status = "Running";
+            else if (status_class == "STOPPED")
+                status = "Not running";
+
+            services.push({ name: name, unit: unit,
+                            status: status, status_class: status_class });
             if (m[2] != "STOPPED")
                 stopped = false;
         }
@@ -139,6 +165,34 @@ function parse_ipactl_status(text, conf) {
     };
 }
 
+class ServiceStatus extends React.Component {
+    render() {
+        var status = this.props.status;
+        return (
+            <div>
+                <p>The FreeIPA web interface can be accessed at <a href={"https://" + status.config.host}>
+                    {status.config.host}</a>
+                </p>
+                <h3>Services</h3>
+                <table className="service-status-table">
+                    { status.services.map(s => (
+                          <tr>
+                              <td>
+                                  <a onClick={left_click(() => {
+                                      cockpit.jump("system/services#/" + encodeURIComponent(s.unit));
+                                      })}>
+                                      {s.name}
+                                  </a>
+                              </td>
+                              <td className={s.status_class}>{s.status}</td>
+                          </tr>
+                      ))
+                    }
+                </table>
+            </div>
+        );
+    }
+}
 
 class Status extends React.Component {
     constructor() {
@@ -155,7 +209,6 @@ class Status extends React.Component {
         cockpit.spawn([ "ipactl", "status" ], { superuser: true, err: "message" })
                .done(output => {
                    cockpit.file("/etc/ipa/default.conf").read().done(config => {
-                       console.log(config);
                        this.setState({ status: parse_ipactl_status(output, config) });
                    });
                })
@@ -172,13 +225,13 @@ class Status extends React.Component {
         this.setState({ action: { running: true,
                                   title: "Starting" } });
         cockpit.spawn([ "ipactl", "start" ], { superuser: true, err: "message" })
-               .done(output => {
-                   this.setState({ action: { output: output } });
+               .done(() => {
+                   this.setState({ action: { } });
                    this.update_status();
                })
                .fail((error) => {
-                   this.setState({ action: {failure_title: "Starting failed",
-                                            failure: error.message } });
+                   this.setState({ action: { } });
+                   show_error(error.message);
                    this.update_status();
                });
     }
@@ -187,23 +240,19 @@ class Status extends React.Component {
         this.setState({ action: { running: true,
                                   title: "Stopping" } });
         cockpit.spawn([ "ipactl", "stop" ], { superuser: true, err: "message" })
-               .done(output => {
-                   this.setState({ action: { output: output } });
+               .done(() => {
+                   this.setState({ action: { } });
                    this.update_status();
                })
                .fail((error) => {
-                   this.setState({ action: { failure_title: "Stopping failed",
-                                             failure: error.message } });
+                   this.setState({ action: { } });
+                   show_error(error.message);
                    this.update_status();
                });
     }
 
     render() {
         var self = this;
-        var status, status_elt;
-        var action, action_progress, action_error;
-
-        console.log(self.state.status);
 
         function show_setup_dialog() {
             setup_dialog(() => {
@@ -215,112 +264,71 @@ class Status extends React.Component {
         // XXX - just use freeipa-ldap?
         var ports = [ "http", "https", "ldap", "ldaps", "kerberos", "kpasswd", "ntp" ];
 
-        status = this.state.status;
-        if (status) {
-            if (status.running) {
-                status_elt = (
-                    <div className="spinner"/>
-                );
-            } else if (status.needs_config) {
-                status_elt = (
-                    <div>
-                        <h2>FreeIPA needs to be setup.</h2>
-                        <button className="btn btn-primary" onClick={left_click(show_setup_dialog)}>Setup</button>
-                    </div>
-                );
-            } else if (status.failure) {
-                status_elt = (
-                    <div className="alert alert-danger">
-                        <span className="pficon pficon-error-circle-o"/>
-                        <strong>There was an error while checking the status</strong>
-                        <pre>{status.failure}</pre>
-                    </div>
-                );
-            } else if (status.stopped) {
-                status_elt = (
-                    <div>
-                        <h2>FreeIPA for <b>{status.config.realm}</b> is stopped.</h2>
-                        <h3>Network ports</h3>
-                        <FirewallPorts ports={ports}/>
-                    </div>
-                );
-            } else {
-                status_elt = (
-                    <div>
-                        <h2>FreeIPA for <b>{status.config.realm}</b> is running.</h2>
-                        <p>The FreeIPA web interface can be accessed at <a href={"https://" + status.config.host}>
-                            {status.config.host}</a></p>
-                        <h3>Services</h3>
-                        <table className="service-status-table">
-                            { status.services.map(s => (
-                                  <tr>
-                                      <td>
-                                          <a onClick={left_click(() => {
-                                                  cockpit.jump("system/services#/" + encodeURIComponent(s.unit));
-                                              })}>
-                                              {s.name}
-                                          </a>
-                                      </td>
-                                      <td className={s.status}>{s.status}</td>
-                                  </tr>
-                              ))
-                            }
-                        </table>
-                        <h3>Network ports</h3>
-                        <FirewallPorts ports={ports}/>
-                    </div>
-                );
-            }
-        }
+        var status = this.state.status;
 
-        action = this.state.action;
-        if (action) {
-            if (action.running) {
-                action_progress = (
-                    <span className="action-progress">
-                        {action.title}
-                        <span className="spinner spinner-sm spinner-inline"/>
-                    </span>
-                );
-                action_error = null;
-            } else if (action.failure) {
-                action_progress = null
-                action_error = (
-                    <div className="alert alert-danger">
-                        <span className="pficon pficon-error-circle-o"/>
-                        <strong>{action.failure_title}</strong>
-                        <pre>{action.failure}</pre>
-                    </div>
-                );
-            } else {
-                action_progress = null;
-                action_error = null;
-            }
+        if (!status || status.running)
+            return <div className="spinner spinner-lg status-spinner"/>;
+
+        if (status.needs_config)
+            return (
+                <center className="setup-message">
+                    <p><img src="logo-big.png"/></p>
+                    <p>FreeIPA needs to be setup before it can be used</p>
+                    <p><button className="btn btn-primary"
+                               onClick={left_click(show_setup_dialog)}>
+                        Run Initial Setup
+                    </button></p>
+                </center>
+            );
+
+        var status_text;
+        var status_button;
+        if (status.failure) {
+            status_text = (
+                <span>There was an error while checking the status. <a onClick={left_click(() => show_error(status.failure))}>More..</a></span>
+            );
+            status_button = null;
+        } else if (this.state.action && this.state.action.running) {
+            status_text = null;
+            status_button = (
+                <div className="spinner"/>
+            );
+        } else if (status.stopped) {
+            status_text = "Stopped";
+            status_button = (
+                <button className="btn btn-default"
+                        onClick={left_click(() => { this.start(); })}>
+                    Start
+                </button>
+            );
+        } else {
+            status_text = "Running";
+            status_button = (
+                <button className="btn btn-default"
+                        onClick={left_click(() => { this.stop(); })}>
+                    Stop
+                </button>
+            );
         }
 
         return (
             <div>
-                <div className="pull-right">
-                    {action_progress}
-                    <button className="btn btn-default"
-                            onClick={left_click(() => { this.start(); })}>
-                        Start
-                    </button>
-                    <button className="btn btn-default"
-                            onClick={left_click(() => { this.stop(); })}>
-                        Stop
-                    </button>
-                    <button className="btn btn-default fa fa-refresh"
-                            onClick={left_click(() => {
-                                    self.setState({ action: null });
-                                    this.update_status();
-                                })}/>
+                <table className="table header">
+                    <tbody>
+                        <tr>
+                            <td><img src="logo.png"/></td>
+                            <td>FreeIPA</td>
+                            <td>{status_text}</td>
+                            { status_button? <td>{status_button}</td> : null }
+                        </tr>
+                    </tbody>
+                </table>
+                <div>
+                    <div className="pull-right">
+                        <FirewallPorts ports={ports}/>
+                    </div>
+                    <ServiceStatus status={status}/>
                 </div>
-                <h1>FreeIPA</h1>
-                <center>
-                    {action_error}
-                    {status_elt}
-                </center>
             </div>
         );
     }
