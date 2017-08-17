@@ -20,6 +20,8 @@ module.exports = {
         new copy(
             [
                 { from: "index.html", to: "dist/" },
+                { from: "logo.png", to: "dist/" },
+                { from: "logo-big.png", to: "dist/" },
                 { from: "manifest.json", to: "dist/" }
             ]
         )
