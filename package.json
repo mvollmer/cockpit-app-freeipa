@@ -21,7 +21,6 @@
         "raw-loader": ""
     },
     "scripts": {
-        "build": "webpack",
-        "watch": "webpack --watch"
+        "build": "./webpack-with-stats"
     }
 }

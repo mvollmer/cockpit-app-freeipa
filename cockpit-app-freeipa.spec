@@ -15,12 +15,12 @@ Requires: freeipa-server
 FreeIPA installer for Cockpit
 
 %prep
+%setup -n cockpit-app-freeipa
 
 %build
 
 %install
-mkdir -p %{buildroot}
-tar --strip-components=1 -xzf %{sources} -C %{buildroot}
+make install-only DESTDIR=%{buildroot}
 find %{buildroot} -type f >> files.list
 sed -i "s|%{buildroot}||" *.list
 
