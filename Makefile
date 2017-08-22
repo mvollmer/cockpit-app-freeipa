@@ -18,6 +18,7 @@ EXTRA_DIST = \
 	org.cockpit-project.app-freeipa.metainfo.xml \
 	org.cockpit-project.app-freeipa.64x64.png \
 	package.json \
+        .eslintrc.json \
 	webpack.config.js \
 	webpack-with-stats \
 	Makefile
