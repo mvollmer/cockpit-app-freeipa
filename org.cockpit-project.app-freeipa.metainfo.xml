@@ -17,5 +17,5 @@
     </p>
   </description>
   <extends>cockpit.desktop</extends>
-  <launchable type="cockpit-package">app-freeipa</launchable>
+  <launchable type="cockpit-manifest">app-freeipa</launchable>
 </component>
