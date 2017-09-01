@@ -1,7 +1,6 @@
-## Cockpit FreeIPA installer Minimal Viable Proof Of Concept
+## Cockpit FreeIPA Installer
 
-This is something that people can point fingers at and say "This
-sucks" and start making it suck less.
+This is a Cockpit add-on that can install and setup FreeIPA.
 
 ### Building
 
